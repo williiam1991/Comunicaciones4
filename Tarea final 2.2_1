@@ -1,0 +1,89 @@
+import numpy as np
+import random
+import scipy.signal
+import matplotlib.pyplot as plt
+import soundfile as sf
+import scipy.io
+
+def crear_x_n():
+    num_muestras = random.randint(25, 30)
+    x_n = np.random.uniform(-5, 5, num_muestras)
+    return x_n
+
+def calculo_coeficientes(x, y):
+    num_coef = 10
+    X = np.zeros((len(x) - num_coef, 2 * num_coef))
+    for i in range(len(x) - num_coef):
+        X[i, :num_coef] = x[i:i + num_coef]
+        X[i, num_coef:] = -y[i:i + num_coef]
+
+    b, a = np.linalg.lstsq(X, y[num_coef:], rcond=None)[0].reshape(2, -1)
+
+    # Guardar los coeficientes en un archivo .mat
+    scipy.io.savemat('coef2.mat', {'b': b, 'a': a})
+
+    return b, a
+
+def simular_sistema(x_n, A, B, ruido):
+    y_n = np.zeros_like(x_n)
+    for i in range(len(x_n)):
+        y_n[i] = x_n[i] + A * x_n[i-2000] - B * y_n[i-750] + ruido[i]
+    return y_n
+
+def simular_recibir_y_n(grupo_num):
+    y_cargado, fs = sf.read(f'y2_{grupo_num}.wav')
+    return y_cargado, fs
+
+def main():
+    grupo_num = "1"  # Reemplaza con el número de tu grupo
+    x_n, fs = sf.read(f'x2_{grupo_num}.wav')
+
+    # Generación de señal de ruido
+    ruido = np.random.normal(0, 0.1, len(x_n))
+
+    # Simulación del sistema y creación de la señal de salida
+    A, B = 0.5, 0.25  # Valores de A y B a utilizar
+    y_n = simular_sistema(x_n, A, B, ruido)
+    sf.write(f"y2_{grupo_num}.wav", y_n, fs)
+
+    # Cálculo de coeficientes
+    b, a = calculo_coeficientes(x_n, y_n)
+    print("Coeficientes b:", b)
+    print("Coeficientes a:", a)
+
+    # Cargar los coeficientes desde un archivo .mat
+    coef = scipy.io.loadmat('coef2.mat')
+    b = coef['b']
+    a = coef['a']
+
+    # Cálculo de la respuesta al impulso y la respuesta al escalón unitario
+    coef = scipy.io.loadmat('coef2.mat')
+    b = coef['b']
+    a = coef['a'].flatten()
+
+    # Cálculo de la respuesta al impulso y la respuesta al escalón unitario
+    _, h = scipy.signal.impulse((b, a))
+    _, u = scipy.signal.step((b, a))
+
+    # Visualización de las señales
+    t = np.arange(len(x_n)) / fs
+    plt.figure()
+    plt.subplot(3, 1, 1)
+    plt.plot(t, x_n)
+    plt.title("Señal de entrada")
+    plt.xlabel("Tiempo (s)")
+    plt.ylabel("Amplitud")
+    plt.subplot(3, 1, 2)
+    plt.plot(t, y_n)
+    plt.title("Señal de salida")
+    plt.xlabel("Tiempo (s)")
+    plt.ylabel("Amplitud")
+    plt.subplot(3, 1, 3)
+    plt.stem(u, use_line_collection=True)
+    plt.title("Respuesta al escalón unitario")
+    plt.xlabel("Muestras")
+    plt.ylabel("Amplitud")
+    plt.show()
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,108 @@
+import numpy as np
+import random
+import scipy.signal
+import scipy.io
+import matplotlib.pyplot as plt
+
+def crear_x_n():
+    num_muestras = random.randint(25, 30)
+    x_n = np.random.uniform(-5, 5, num_muestras)
+    return x_n
+
+def calculo_coeficientes(x, y):
+    num_coef = 10
+    X = np.zeros((len(x) - num_coef, 2 * num_coef))
+    for i in range(len(x) - num_coef):
+        X[i, :num_coef] = x[i:i + num_coef]
+        X[i, num_coef:] = -y[i:i + num_coef]
+
+    b, a = np.linalg.lstsq(X, y[num_coef:], rcond=None)[0].reshape(2, -1)
+    return b, a
+
+def simular_sistema(x_n):
+    b = np.ones(11)
+    a = np.zeros(11)
+    a[0], a[-1] = 1, -1
+    y_n = scipy.signal.lfilter(b, a, x_n)
+    return y_n
+
+def simular_recibir_y_n(y, grupo_num):
+    np.save(f'y1_{grupo_num}.npy', y)
+    y_cargado = np.load(f'y1_{grupo_num}.npy')
+    return y_cargado
+
+def CalculoCoef1(x, y):
+    b, a = calculo_coeficientes(x, y)
+    return b, a
+
+def main():
+    grupo_num = "1"  # Reemplaza con el número de tu grupo
+    x_n = crear_x_n()
+    np.save(f'x1_{grupo_num}.npy', x_n)
+
+    # Simulación del sistema y creación de la señal de salida
+    y_n = simular_sistema(x_n)
+    y_cargado = simular_recibir_y_n(y_n, grupo_num)
+
+    # Cálculo de coeficientes
+    b, a = CalculoCoef1(x_n, y_cargado)
+    print("Coeficientes b:", b)
+    print("Coeficientes a:", a)
+
+    # Guardar los coeficientes en un archivo .mat
+    scipy.io.savemat(f'coeficientes_{grupo_num}.mat', {'b': b, 'a': a})
+
+    # Cálculo de la respuesta al impulso y la respuesta al escalón unitario
+    _, h = scipy.signal.impulse((b, a))
+    _, u = scipy.signal.step((b, a))
+
+    # Visualización de las señales
+    plt.figure()
+    plt.subplot(2, 2, 1)
+    plt.stem(x_n, use_line_collection=True)
+    plt.title("Señal x[n]")
+    plt.subplot(2, 2, 2)
+    plt.stem(y_cargado, use_line_collection=True)
+    plt.title("Señal y[n]")
+    plt.subplot(2, 2, 3)
+    plt.stem(h, use_line_collection=True)
+    plt.title("Respuesta al impulso")
+    plt.subplot(2, 2, 4)
+    plt.stem(u, use_line_collection=True)
+    plt.title("Respuesta al escalón unitario")
+    plt.show()
+
+    # Obtener polos y ceros
+    z, p, k = scipy.signal.tf2zpk(b, a)
+
+    # Gráfico de polos y ceros
+    plt.figure()
+    plt.subplot(2, 2, 1)
+    plt.plot(np.real(z), np.imag(z), 'o', label='Ceros')
+    plt.plot(np.real(p), np.imag(p), 'x', label='Polos')
+    plt.grid()
+    plt.legend()
+    plt.title('Diagrama de polos y ceros')
+
+    # Gráfico de la respuesta en frecuencia
+    w, H = scipy.signal.freqz(b, a)
+    f = w / (2 * np.pi)
+    plt.subplot(2, 2, 2)
+    plt.plot(f, 20 * np.log10(abs(H)))
+    plt.title('Magnitud de la respuesta en frecuencia')
+    plt.xlabel('Frecuencia (Hz)')
+    plt.ylabel('Magnitud (dB)')
+    plt.grid()
+
+    plt.subplot(2, 2, 3)
+    plt.plot(f, np.unwrap(np.angle(H)))
+    plt.title('Fase de la respuesta en frecuencia')
+    plt.xlabel('Frecuencia (Hz)')
+    plt.ylabel('Fase (rad)')
+    plt.grid()
+
+    plt.tight_layout()
+    plt.show()
+
+if __name__ == "__main__":
+    main()
